@@ -70,7 +70,7 @@ jobs:
         env:
           VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
           NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-        run: yarn tauri android build --apk true
+        run: yarn tauri android build --apk
       - uses: actions/upload-artifact@v4
         with:
           name: TransLaTor-Android
@@ -102,11 +102,11 @@ jobs:
           -project src-tauri/gen/apple/translator.xcodeproj
           -scheme translator_iOS
           -sdk iphonesimulator
-          -configuration Debug
+          -configuration Release
           -derivedDataPath src-tauri/gen/apple/build
           CODE_SIGNING_ALLOWED=NO
           CODE_SIGNING_REQUIRED=NO
       - uses: actions/upload-artifact@v4
         with:
           name: TransLaTor-iOS
-          path: src-tauri/gen/apple/build/Build/Products/Debug-iphonesimulator/*.app
+          path: src-tauri/gen/apple/build/Build/Products/Release-iphonesimulator/*.app
