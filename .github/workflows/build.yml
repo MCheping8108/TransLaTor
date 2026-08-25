@@ -1,0 +1,95 @@
+name: Build installers
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev \
+            libappindicator3-dev librsvg2-dev patchelf libssl-dev
+      - run: yarn install --frozen-lockfile
+      - name: Build Tauri bundle
+        uses: tauri-apps/tauri-action@v0
+        env:
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "TransLaTor v__VERSION__"
+          releaseBody: "跨平台安装包由 GitHub Actions 自动构建。"
+          releaseDraft: true
+          prerelease: false
+
+  android:
+    name: Android
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android
+      - uses: android-actions/setup-android@v3
+      - uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r27
+      - run: yarn install --frozen-lockfile
+      - run: yarn tauri android init
+      - name: Build Android APK
+        env:
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
+          NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        run: yarn tauri android build --apk true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TransLaTor-Android
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+
+  ios:
+    name: iOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios, x86_64-apple-ios
+      - run: yarn install --frozen-lockfile
+      - run: yarn tauri ios init
+      - name: Build iOS app
+        env:
+          VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
+        run: yarn tauri ios build --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TransLaTor-iOS
+          path: src-tauri/gen/apple/build/**/*.app
