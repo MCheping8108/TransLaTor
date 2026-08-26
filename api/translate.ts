@@ -8,7 +8,9 @@ export default async function handler(request: Request) {
     });
   }
 
-  const apiKey = process.env.API_KEY;
+  const apiKey = (globalThis as typeof globalThis & {
+    process?: { env?: Record<string, string | undefined> };
+  }).process?.env?.API_KEY;
   if (!apiKey) {
     return new Response(JSON.stringify({ error: "服务端未配置 API_KEY" }), {
       status: 500,
