@@ -4,7 +4,7 @@ import "./App.css";
 
 const API_URL = import.meta.env.DEV
   ? "/api/translate"
-  : "https://api-fanyi.qzhua.net/api/v1/translate";
+  : "/api/translate";
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
 
 const LANGUAGE_OPTIONS = [
@@ -113,8 +113,15 @@ export default function App() {
     setIsTranslating(true);
     setTranslated("");
     try {
-      const json = import.meta.env.DEV
-        ? await (async () => {
+      const isTauri = "__TAURI_INTERNALS__" in window;
+      const json = isTauri
+        ? await invoke<Record<string, unknown>>("translate_request", {
+          text,
+          sourceLang,
+          targetLang,
+          apiKey: API_KEY,
+        })
+        : await (async () => {
           const response = await fetch(API_URL, {
             method: "POST",
             headers: {
@@ -125,13 +132,7 @@ export default function App() {
           });
           if (!response.ok) throw new Error(`请求失败（${response.status}）`);
           return response.json();
-        })()
-        : await invoke<Record<string, unknown>>("translate_request", {
-          text,
-          sourceLang,
-          targetLang,
-          apiKey: API_KEY,
-        });
+        })();
       const extract = (value: unknown): string | null => {
         if (typeof value === "string") return value;
         if (!value || typeof value !== "object") return null;
