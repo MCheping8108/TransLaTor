@@ -1,3 +1,5 @@
+declare const process: { env?: Record<string, string | undefined> };
+
 const API_ENDPOINT = "https://api-fanyi.qzhua.net/api/v1/translate";
 
 export async function GET() {
