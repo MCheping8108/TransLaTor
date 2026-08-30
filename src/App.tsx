@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
-const API_URL = import.meta.env.DEV
-  ? "/api/translate"
-  : "/api/translate";
+const API_URL = "/api/translate";
 const API_KEY = import.meta.env.VITE_API_KEY ?? "";
+const TTS_API_URL = "https://tts.wangwangit.com/v1/audio/speech";
 
 const LANGUAGE_OPTIONS = [
   { code: "auto", label: "自动检测" },
@@ -32,6 +31,26 @@ function getLocaleForLang(code: string) {
     pt: "pt-PT", it: "it-IT", ar: "ar-SA", vi: "vi-VN", id: "id-ID",
   };
   return locales[code] ?? "en-US";
+}
+
+function getTtsVoiceForLang(code: string) {
+  const voices: Record<string, string> = {
+    zh: "zh-CN-XiaoxiaoNeural",
+    "zh-Hant": "zh-TW-HsiaoChenNeural",
+    ja: "ja-JP-NanamiNeural",
+    ko: "ko-KR-SoonBokNeural",
+    fr: "fr-FR-DeniseNeural",
+    de: "de-DE-KatjaNeural",
+    ru: "ru-RU-SvetlanaNeural",
+    es: "es-ES-ElviraNeural",
+    pt: "pt-BR-FranciscaNeural",
+    it: "it-IT-BiancaNeural",
+    ar: "ar-SA-ZariyahNeural",
+    vi: "vi-VN-HoaiMyNeural",
+    id: "id-ID-GadisNeural",
+    en: "en-US-JennyNeural",
+  };
+  return voices[code] ?? "zh-CN-XiaoxiaoNeural";
 }
 
 function speechRecognition() {
@@ -67,11 +86,15 @@ export default function App() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [copied, setCopied] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const canRecognize = Boolean(speechRecognition());
 
   useEffect(() => () => {
     recognitionRef.current?.stop();
-    window.speechSynthesis?.cancel();
+    audioRef.current?.pause();
+    if (audioRef.current?.src) {
+      URL.revokeObjectURL(audioRef.current.src);
+    }
   }, []);
 
   function startRecognition() {
@@ -159,21 +182,59 @@ export default function App() {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  function toggleSpeech() {
-    if (!translated || !("speechSynthesis" in window)) return;
+  async function toggleSpeech() {
+    if (!translated) return;
+
     if (isSpeaking) {
-      window.speechSynthesis.cancel();
+      audioRef.current?.pause();
+      audioRef.current = null;
       setIsSpeaking(false);
       return;
     }
-    const utterance = new SpeechSynthesisUtterance(translated);
-    utterance.lang = getLocaleForLang(targetLang);
-    utterance.rate = 0.95;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
+
+    try {
+      setIsSpeaking(true);
+      const response = await fetch(TTS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input: translated,
+          voice: getTtsVoiceForLang(targetLang),
+          speed: 1.0,
+          pitch: "0",
+          style: "general",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`语音生成失败：${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      if (audioRef.current) {
+        audioRef.current.pause();
+        if (audioRef.current.src.startsWith("blob:")) {
+          URL.revokeObjectURL(audioRef.current.src);
+        }
+      }
+
+      audioRef.current = audio;
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      await audio.play();
+    } catch (error) {
+      console.error(error);
+      setIsSpeaking(false);
+    }
   }
 
   return (
@@ -226,7 +287,7 @@ export default function App() {
           </div>
           <div className="panel result-panel">
             <div className="panel-heading"><span>译文</span>{translated && <div className="result-actions">
-              {"speechSynthesis" in window && <button className={`copy-button ${isSpeaking ? "speaking" : ""}`} onClick={toggleSpeech}>{isSpeaking ? "停止朗读" : "朗读译文"}</button>}
+              <button className={`copy-button ${isSpeaking ? "speaking" : ""}`} onClick={toggleSpeech}>{isSpeaking ? "停止朗读" : "朗读译文"}</button>
               <button className="copy-button" onClick={copyResult}>{copied ? "已复制" : "复制译文"}</button>
             </div>}</div>
             <div className={`translated ${isTranslating ? "loading" : ""}`}>
