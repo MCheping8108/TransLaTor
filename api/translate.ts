@@ -7,7 +7,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const apiKey = process?.env?.API_KEY;
+  const apiKey = (process?.env?.API_KEY ?? "").replace(/^\uFEFF/, "").trim();
   if (!apiKey) {
     return Response.json({ error: "服务端未配置 API_KEY" }, { status: 500 });
   }
