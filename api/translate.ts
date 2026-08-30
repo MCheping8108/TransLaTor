@@ -1,21 +1,13 @@
 const API_ENDPOINT = "https://api-fanyi.qzhua.net/api/v1/translate";
 
-export default async function handler(request: Request) {
-  if (request.method !== "POST") {
-    return new Response(JSON.stringify({ error: "仅支持 POST 请求" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
+export async function GET() {
+  return Response.json({ error: "仅支持 POST 请求" }, { status: 405 });
+}
 
-  const apiKey = (globalThis as typeof globalThis & {
-    process?: { env?: Record<string, string | undefined> };
-  }).process?.env?.API_KEY;
+export async function POST(request: Request) {
+  const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: "服务端未配置 API_KEY" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json({ error: "服务端未配置 API_KEY" }, { status: 500 });
   }
 
   try {
@@ -28,16 +20,16 @@ export default async function handler(request: Request) {
       },
       body: JSON.stringify(body),
     });
+
     const responseBody = await response.text();
     return new Response(responseBody, {
       status: response.status,
-      headers: { "Content-Type": response.headers.get("Content-Type") ?? "application/json" },
+      headers: {
+        "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+      },
     });
   } catch (error) {
     console.error("Translation proxy error:", error);
-    return new Response(JSON.stringify({ error: "翻译服务暂时不可用" }), {
-      status: 502,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json({ error: "翻译服务暂时不可用" }, { status: 502 });
   }
 }
